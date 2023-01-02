@@ -1,0 +1,236 @@
+#codigo para sensor
+#include <ESP8266WiFi.h>
+#include "DHT.h"
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+
+//PARA EL OLED
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include "Adafruit_VEML6070.h"
+
+Adafruit_VEML6070 uv = Adafruit_VEML6070();
+
+int indice;
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET  -1//LED_BUILTIN //5    // define SSD1306 OLED reset at ESP8266 GPIO5 (NodeMCU D1)
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//Adafruit_SSD1306 display(OLED_RESET);
+
+
+
+#define DHTPIN  14 //pin 14  es el D5 en LOLIN # pin GPIO 4 es D2 en #WeMos D4 es el GPIO2 Wemos como base de ocupa el 4 en vez de el 2
+//depende del sensor dht11 o dht22 el dht22 es mas preciso..
+//#define DHTTYPE DHT11   // DHT 11
+#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
+//#define DHTTYPE DHT21   // DHT 21 (AM2301)
+
+//DEFINICION PARA CONECTARSE A UNA IP Y UN PUERTO, esto es para enviar datos a un host y puerto especifico
+const uint16_t port = 9000;
+const char * host = "192.168.xxx.xxx";
+
+// LARGO DE DATOS PARA LA MAC
+const uint8_t  mac = 20;
+
+WiFiClient client;
+
+DHT dht(DHTPIN, DHTTYPE);
+// WIFI credenciales
+#define WIFI_SSID "nombre del wifi"
+#define WIFI_PASS "es obvio lo que va aca XD"
+ 
+void setup() {
+  // Setup del puerto serial
+  Serial.begin(9600);
+  Serial.setTimeout(2000);
+  // Wait for serial to initialize.
+  while(!Serial) { }
+    //INICIO SENSOR UV
+  uv.begin(VEML6070_1_T);
+  Serial.println("Dsipositivo iniciado");
+  Serial.println("-------------------------------------");
+  Serial.println("Lectura en dht");
+  Serial.println("-------------------------------------");
+ // SE DEBE DE DESABILITAR EL PIN ( PARA QUE EL VOLTAJE INICIE BIEN AL SENSOR
+
+
+  digitalWrite(8, LOW);//8 es el pin de 3v en wemos, se desahbilita y habilita para que detecte bien el sensor DHT22
+  delay(1000);
+  digitalWrite(8, HIGH);
+  delay(1000);
+//#############
+  
+  // inicio de la conn
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+ 
+  // Connecting to WiFi...
+  Serial.print("Conectado a la red ");
+  Serial.print(WIFI_SSID);
+  // Bucle hasta que conecte
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(100);
+    Serial.print(".");
+  }
+
+  // Conectado a la red
+  Serial.println();
+  Serial.print("Enlace exitosa! IP: ");
+  Serial.println(WiFi.localIP());
+  //fuerza de señal
+  long rssi = WiFi.RSSI();
+  Serial.print("RSSI:");
+  Serial.println(rssi);
+  int calidad = 0;
+  calidad =2*(rssi+100);
+  Serial.print("Señal WiFi :");
+  Serial.print(calidad); 
+  Serial.println(" %");
+  //DIRECCION MAC WIFI UTILIZAR LA MAC PARA ACEPTAR LA INFO INJECTADA EN EL SERVER
+   Serial.println();
+   Serial.print("MAC: ");
+   Serial.println(WiFi.macAddress());
+  //OLED
+    Wire.begin(4, 0);           // set I2C pins [SDA = GPIO4 (D2), SCL = GPIO0 (D3)], frecuencia por defecto 100kHz
+ 
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3c);
+  dht.begin();
+  //limpio el buffer porque aparecian puntos extras en la pantalla
+  display.clearDisplay();
+ 
+  display.drawFastHLine(0, 52, SSD1306_LCDWIDTH, WHITE);
+ 
+  display.setTextSize(2);
+  display.setTextColor(WHITE, BLACK);
+  display.setCursor(32,0);
+  display.print("Gr0UnD");
+  display.setCursor(27, 30);
+  display.print("F0x");
+  display.display();
+
+}
+int timeSinceLastRead = 0; 
+void loop() {
+   
+  // lectura cada 2 seg.
+  if(timeSinceLastRead > 3000) {
+    // Sensor DHT22 y DHT11 tiene refresco de 2 seg, sensor mas moderno de 250 mls
+    float h = dht.readHumidity();
+    // celsius es por defecto
+    float t = dht.readTemperature();
+    // para farenheit Fahrenheit (isFahrenheit = true)
+    float f = dht.readTemperature(true);
+
+    // si el valor de h o t o f
+    if (isnan(h) || isnan(t) || isnan(f)) {
+      Serial.println("Error de lectura desde el sensor, falla en pin o en tiempo de lectura!");
+      timeSinceLastRead = 0;
+
+      return;
+
+    }
+
+//esto es para conectar un sensor UV
+    Serial.print("Indice UV:");
+    Serial.println(indice);
+    if (uv.readUV()==0){
+      indice =0;
+      }
+
+        delay(25);
+  if (uv.readUV()>0 && uv.readUV()<=140){
+    indice=1;
+  }
+  delay(25);
+  if (uv.readUV()>140 && uv.readUV()<=280){
+    indice=2;
+  }
+  delay(25);
+  if (uv.readUV()>280 && uv.readUV()<=373){
+    indice=3;
+  }
+  delay(25);
+  if (uv.readUV()>373 && uv.readUV()<=466){
+    indice=4;
+  }
+  delay(25);
+  if (uv.readUV()>466 && uv.readUV()<=560){
+    indice=5;
+  }
+  delay(25);
+  if (uv.readUV()>560 && uv.readUV()<=654){
+    indice=6;
+  }
+
+  
+    //int UVindex = uv.readUV();
+    //UVindex /= 100.0;
+    //Serial.print("UV: "); Serial.println(UVindex);
+
+     // AQUI SE DEBE AGREGAR LA OPCION DE LECTURA DE CO2, DEBE DE REEMPLAZARCE EL VALOR DE indice por Co2
+
+    /////////////////////////////////
+    Serial.print("Humedad: ");
+    Serial.print(h);
+    Serial.println(" %\t");
+    Serial.print("Temperatura: ");
+    Serial.print(t);
+    Serial.println(" *C ");
+    client.connect(host, port);
+    String nombre = "Lolin 1";  
+
+    String mac = WiFi.macAddress();                               //AGREGADO
+    Serial.print(mac);
+     String ipadd1 = WiFi.localIP().toString().c_str();
+    Serial.println();  // hacer un ping al server, si este responde se envia el paquete
+    //CONDICION SI CONTESTA EL PING ENVIA EL PAQUETE
+      //ENIAR PING AL HOST
+
+    String DATA =  String(t) + "," + String(h) + "," + String(indice) + "," + String(nombre) + "," + String(mac) + "," + String(ipadd1); //EN EL PAQUETE DE DATOS AGREGAR LA MAC DEL DISPOSITIVO SE AGREGO LA IP
+    Serial.print(DATA);                                                                                                        //AGREGAR EN LA DB sensores EL CAMPO MAC y LA IP
+    client.print(DATA);
+    Serial.println();
+    Serial.println("MENSAJE ENVIADO");
+    client.stop();
+    timeSinceLastRead = 0;
+
+    
+    //MOSTRAR EN OLED
+      // print data on the SSD1306 display
+  
+  display.setTextSize(2);
+  display.setCursor(0,10);
+  display.print("TEMP :");    
+  display.setCursor(60, 10);
+  display.print(t);
+  display.setCursor(0, 30);
+  display.print("HUM");
+  display.setCursor(60, 30);
+  display.print(h);
+  display.drawRect(120, 10, 3, 3, WHITE);     // simbolo de grados ( ° )
+  display.setTextSize(1);
+  display.setCursor(0, 50);
+  display.print("--> a Cloud oem!");
+  display.display();
+  //ESTE RETARDO DE 5 SEG, SIRVE PARA TENER UNA LECTURA MAS FIDEDIGNA DEL SENSOR DHT22
+  delay(5000);
+  ////////////
+    //fuerza de señal
+  long rssi = WiFi.RSSI();
+  Serial.print("RSSI:");
+  Serial.println(rssi);
+  int calidad = 0;
+  calidad =2*(rssi+100);
+  Serial.print("Señal WiFi :");
+  Serial.print(calidad); 
+  Serial.println(" %");
+  }
+  delay(100);
+  timeSinceLastRead += 100;
+  display.clearDisplay();
+  }
+
